@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 갤러리</title>
+<style>
+  /* ========================================================
+     ① 여기 3줄만 본인 정보로 바꾸면 끝입니다.
+     ======================================================== */
+</style>
+</head>
+<body>
+<script>
+  // ========================================================
+  // ① 여기 3줄만 본인 정보로 바꾸세요.
+  // ========================================================
+  const GITHUB_USER   = "tacowasabi123";   // 깃허브 아이디
+  const GITHUB_REPO   = "yena-asset";      // 레포지토리 이름
+  const IMAGE_FOLDER  = "images";          // 이미지를 넣어둔 폴더 이름 (레포 안에 이 이름으로 폴더를 만드세요)
+  const BRANCH        = "main";            // 보통 main, 가끔 master
+  // ========================================================
+</script>
+
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "맑은 고딕", sans-serif;
+    background: #15171c;
+    color: #e8e8ec;
+  }
+  header {
+    padding: 28px 24px 18px;
+    border-bottom: 1px solid #2a2d35;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #8b8fa3;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 4px 0 6px;
+    font-size: 26px;
+  }
+  .desc {
+    color: #9ea2b3;
+    font-size: 14px;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 18px 24px;
+    flex-wrap: wrap;
+  }
+  input[type="text"] {
+    flex: 1;
+    min-width: 220px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #333642;
+    background: #1d1f27;
+    color: #e8e8ec;
+    font-size: 14px;
+  }
+  button.action {
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid #333642;
+    background: #1d1f27;
+    color: #e8e8ec;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  button.action:hover { background: #262933; }
+  .status {
+    padding: 0 24px 10px;
+    font-size: 13px;
+    color: #8b8fa3;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+    padding: 10px 24px 40px;
+  }
+  .card {
+    background: #1d1f27;
+    border: 1px solid #2a2d35;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .thumb-wrap {
+    aspect-ratio: 3 / 4;
+    background: #0e0f13;
+    overflow: hidden;
+  }
+  .thumb-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .card-name {
+    padding: 10px 12px 4px;
+    font-size: 14px;
+    font-weight: 600;
+    word-break: break-all;
+  }
+  .card-sub {
+    padding: 0 12px 10px;
+    font-size: 11px;
+    color: #6f7384;
+    word-break: break-all;
+  }
+  .copy-btn {
+    margin: 0 10px 12px;
+    padding: 9px;
+    border-radius: 7px;
+    border: none;
+    background: #3a3f52;
+    color: #e8e8ec;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .copy-btn:hover { background: #474d66; }
+  .copy-btn.copied { background: #2f7d5c; }
+  .empty, .error {
+    padding: 60px 24px;
+    text-align: center;
+    color: #8b8fa3;
+  }
+  .error { color: #e08787; }
+</style>
+
+<header>
+  <div class="eyebrow">Image Gallery</div>
+  <h1 id="galleryTitle">이미지 갤러리</h1>
+  <div class="desc">등록된 이미지를 검색하고, 이미지마다 코드를 한 번에 복사하세요.</div>
+</header>
+
+<div class="toolbar">
+  <input type="text" id="searchBox" placeholder="파일명 검색 (예: 평상시, 눈치)">
+  <button class="action" id="resetBtn">검색 초기화</button>
+  <button class="action" id="copyAllBtn">현재 목록 전체 복사</button>
+</div>
+<div class="status" id="statusLine">불러오는 중...</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+  const grid = document.getElementById('grid');
+  const statusLine = document.getElementById('statusLine');
+  const searchBox = document.getElementById('searchBox');
+  const resetBtn = document.getElementById('resetBtn');
+  const copyAllBtn = document.getElementById('copyAllBtn');
+
+  let allFiles = [];       // GitHub에서 가져온 전체 이미지 목록
+  let filteredFiles = [];  // 검색 결과
+
+  const IMG_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+
+  function isImage(filename) {
+    const lower = filename.toLowerCase();
+    return IMG_EXT.some(ext => lower.endsWith(ext));
+  }
+
+  function nameWithoutExt(filename) {
+    return filename.replace(/\.[^.]+$/, '');
+  }
+
+  // 깃허브에 올린 이미지는 아래 주소 형식으로 바로 접근할 수 있습니다.
+  function rawUrl(filename) {
+    return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${BRANCH}/${IMAGE_FOLDER}/${encodeURIComponent(filename)}`;
+  }
+
+  function markdownCode(filename) {
+    return `![](${rawUrl(filename)})`;
+  }
+
+  function render(list) {
+    grid.innerHTML = '';
+    if (list.length === 0) {
+      grid.innerHTML = `<div class="empty">표시할 이미지가 없습니다.</div>`;
+      return;
+    }
+    list.forEach(file => {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'thumb-wrap';
+      const img = document.createElement('img');
+      img.src = rawUrl(file.name);
+      img.loading = 'lazy';
+      img.alt = file.name;
+      thumbWrap.appendChild(img);
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'card-name';
+      nameEl.textContent = nameWithoutExt(file.name);
+
+      const subEl = document.createElement('div');
+      subEl.className = 'card-sub';
+      subEl.textContent = file.name;
+
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = '이미지 코드 복사';
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(markdownCode(file.name)).then(() => {
+          btn.textContent = '복사됨!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = '이미지 코드 복사';
+            btn.classList.remove('copied');
+          }, 1200);
+        });
+      });
+
+      card.appendChild(thumbWrap);
+      card.appendChild(nameEl);
+      card.appendChild(subEl);
+      card.appendChild(btn);
+      grid.appendChild(card);
+    });
+  }
+
+  function applyFilter() {
+    const q = searchBox.value.trim().toLowerCase();
+    filteredFiles = q
+      ? allFiles.filter(f => f.name.toLowerCase().includes(q))
+      : allFiles.slice();
+    statusLine.textContent = `${filteredFiles.length} / ${allFiles.length}개`;
+    render(filteredFiles);
+  }
+
+  searchBox.addEventListener('input', applyFilter);
+  resetBtn.addEventListener('click', () => {
+    searchBox.value = '';
+    applyFilter();
+  });
+  copyAllBtn.addEventListener('click', () => {
+    const text = filteredFiles.map(f => markdownCode(f.name)).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      copyAllBtn.textContent = '복사됨!';
+      setTimeout(() => { copyAllBtn.textContent = '현재 목록 전체 복사'; }, 1200);
+    });
+  });
+
+  // 깃허브 저장소의 이미지 폴더 목록을 가져옵니다.
+  async function loadFiles() {
+    const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${IMAGE_FOLDER}?ref=${BRANCH}`;
+    try {
+      const res = await fetch(apiUrl);
+      if (!res.ok) {
+        throw new Error(`저장소 또는 폴더를 찾을 수 없습니다 (${res.status}). 레포 이름, 폴더 이름, Public 여부를 확인하세요.`);
+      }
+      const data = await res.json();
+      allFiles = data.filter(item => item.type === 'file' && isImage(item.name));
+      allFiles.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      applyFilter();
+    } catch (err) {
+      grid.innerHTML = `<div class="error">${err.message}</div>`;
+      statusLine.textContent = '';
+    }
+  }
+
+  loadFiles();
+</script>
+</body>
+</html>
